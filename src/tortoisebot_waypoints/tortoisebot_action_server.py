@@ -36,7 +36,7 @@ class WaypointActionClass(object):
         self._as.start()
 
         # define a loop rate
-        self._rate = rospy.Rate(25)
+        self._rate = rospy.Rate(40)
 
         # topics
         self._pub_cmd_vel = rospy.Publisher('/cmd_vel', Twist, queue_size=1)
@@ -67,9 +67,12 @@ class WaypointActionClass(object):
         desired_yaw = math.atan2(self._des_pos.y - self._position.y, self._des_pos.x - self._position.x)
         err_pos = math.sqrt(pow(self._des_pos.y - self._position.y, 2) + pow(self._des_pos.x - self._position.x, 2))
         err_yaw = desired_yaw - self._yaw
+        desired_orientation = self._des_pos.z
+        err_orientation = desired_orientation - self._yaw
+        state = 0
 
         # perform task
-        while err_pos > self._dist_precision and success:
+        while  state != 3 and success :
             # update vars
             desired_yaw = math.atan2(self._des_pos.y - self._position.y, self._des_pos.x - self._position.x)
             err_yaw = desired_yaw - self._yaw
@@ -77,28 +80,69 @@ class WaypointActionClass(object):
             rospy.loginfo("Current Yaw: %s" % str(self._yaw))
             rospy.loginfo("Desired Yaw: %s" % str(desired_yaw))
             rospy.loginfo("Error Yaw: %s" % str(err_yaw))
+            if( err_yaw> math.pi):
+                err_yaw =  err_yaw - 2*math.pi
+            if( err_yaw< -math.pi):
+                err_yaw = err_yaw + 2*math.pi
+            
             # logic goes here
+
             if self._as.is_preempt_requested():
+                
                 # cancelled
                 rospy.loginfo("The goal has been cancelled/preempted")
                 self._as.set_preempted()
                 success = False
-            elif math.fabs(err_yaw) > self._yaw_precision:
-                # fix yaw
-                rospy.loginfo("fix yaw")
+            elif state==0:
+                
+                rospy.loginfo("case 0 ")
+                # fix ya
                 self._state = 'fix yaw'
                 twist_msg = Twist()
+                twist_msg.linear.x = 0.0
                 twist_msg.angular.z = 0.65 if err_yaw > 0 else -0.65
                 self._pub_cmd_vel.publish(twist_msg)
-            else:
+
+                if (math.fabs(err_yaw) < self._yaw_precision):
+                    rospy.loginfo("-----------------caso 0 logrado------------------------")
+                    state = 1
+
+            elif state==1:
+                rospy.loginfo("case 1 ")
                 # go to point
-                rospy.loginfo("go to point")
+                rospy.loginfo("Error distance: %s" % str(err_pos))
                 self._state = 'go to point'
                 twist_msg = Twist()
-                twist_msg.linear.x = 0.6
+                twist_msg.linear.x = 0.4
                 twist_msg.angular.z = 0
                 # twist_msg.angular.z = 0.1 if err_yaw > 0 else -0.1
                 self._pub_cmd_vel.publish(twist_msg)
+                if(err_pos < self._dist_precision):
+                    rospy.loginfo("-----------------caso 1 logrado------------------------")
+                    state = 2
+                if(math.fabs(err_yaw) > self._yaw_precision):
+                    state = 0
+            elif  state ==2 :
+                # fix yaw
+                rospy.loginfo("case 2 ")
+                err_orientation = desired_orientation - self._yaw
+                if( err_orientation> math.pi):
+                    err_orientation =  err_orientation- 2*math.pi
+                if( err_orientation< -math.pi):
+                    err_orientation = err_orientation + 2*math.pi
+
+
+                rospy.loginfo("orientation: %s" % str(err_orientation))
+                self._state = 'orientation'
+                twist_msg = Twist()
+                twist_msg.linear.x = 0.0
+                twist_msg.angular.z = 0.65 if err_orientation > 0 else -0.65
+                self._pub_cmd_vel.publish(twist_msg)
+                if(abs(desired_orientation - self._yaw) <self._yaw_precision):
+                    rospy.loginfo("case 3 ")
+                    state = 3
+
+            
 
             # send feedback
             self._feedback.position = self._position

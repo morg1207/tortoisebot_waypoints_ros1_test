@@ -16,9 +16,9 @@ def call_server():
     goal = WaypointActionGoal()
 
     #set pose
-    goal.position.x = 0.0
-    goal.position.y = 0.5
-    goal.position.z = 0.0
+    goal.position.x = -0.3
+    goal.position.y = -0.3
+    goal.position.z = 3.14
 
     client.send_goal(goal, feedback_cb=feedback_cb)
 
